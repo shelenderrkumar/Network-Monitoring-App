@@ -1,0 +1,178 @@
+{% extends 'layouts/base.html' %}
+
+{% block title %} Icons {% endblock title %}
+
+<!-- Specific CSS goes HERE -->
+{% block stylesheets %}{% endblock stylesheets %}
+
+{% block content %}
+
+<div class="header bg-primary pb-6">
+  <div class="container-fluid">
+    <div class="header-body">
+      <div class="row align-items-center py-4">
+        <div class="col-lg-6 col-7">
+          <h6 class="h2 text-white d-inline-block mb-0"></h6>
+          <nav aria-label="breadcrumb" class="d-none d-md-inline-block ml-md-4">
+            <ol class="breadcrumb breadcrumb-links breadcrumb-dark">
+              <li class="breadcrumb-item"><a href="./index"><i class="fas fa-home"></i></a></li>
+              <li class="breadcrumb-item"><a href="#">Runnings Domains</a></li>
+            </ol>
+          </nav>
+        </div>
+      </div>
+      <!-- Card stats -->
+      <div class="row">
+        <div class="col-xl-3 col-md-6">
+          <div class="card card-stats">
+            <!-- Card body -->
+            <div class="card-body">
+              <div class="row">
+                <div class="col">
+                  <h5 class="card-title text-uppercase text-muted mb-0">Total Packets since last run</h5>
+                  <span class="h2 font-weight-bold mb-0">{{t_packets}}</span>
+                </div>
+                <div class="col-auto">
+                  <div class="icon icon-shape bg-gradient-blue text-white rounded-circle shadow">
+                    <i class="ni ni-sound-wave"></i>
+                  </div>
+                </div>
+              </div>
+              <p class="mt-3 mb-0 text-sm">
+                <!-- <span class="text-success mr-2"><i class="fa fa-arrow-up"></i> 3.48%</span> -->
+                <!-- <span class="text-nowrap">Since last minute</span> -->
+              </p>
+            </div>
+          </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+          <div class="card card-stats">
+            <!-- Card body -->
+            <div class="card-body">
+              <div class="row">
+                <div class="col">
+                  <h5 class="card-title text-uppercase text-muted mb-0">Average Packets Flow (per sec)</h5>
+                  <span class="h2 font-weight-bold mb-0">{{timelyListSum/10}}</span>
+                </div>
+                <div class="col-auto">
+                  <div class="icon icon-shape bg-gradient-orange text-white rounded-circle shadow">
+                    <i class="ni ni-chart-pie-35"></i>
+                  </div>
+                </div>
+              </div>
+              <p class="mt-3 mb-0 text-sm">
+                <!-- <span class="text-success mr-2"><i class="fa fa-arrow-up"></i> 3.48%</span> -->
+                <!-- <span class="text-nowrap">Since last minute</span> -->
+              </p>
+            </div>
+          </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+          <div class="card card-stats">
+            <!-- Card body -->
+            <div class="card-body">
+              <div class="row">
+                <div class="col">
+                  <h5 class="card-title text-uppercase text-muted mb-0">Total Protocols Detected</h5>
+                  <span class="h2 font-weight-bold mb-0">{{t_protocols}}</span>
+                </div>
+                <div class="col-auto">
+                  <div class="icon icon-shape bg-gradient-green text-white rounded-circle shadow">
+                    <i class="fa fa-search"></i>
+                  </div>
+                </div>
+              </div>
+              <p class="mt-3 mb-0 text-sm">
+                <!-- <span class="text-success mr-2"><i class="fa fa-arrow-up"></i> 3.48%</span> -->
+                <!-- <span class="text-nowrap">Since last minute</span> -->
+              </p>
+            </div>
+          </div>
+        </div>
+        <div class="col-xl-3 col-md-6">
+          <div class="card card-stats">
+            <!-- Card body -->
+            <div class="card-body">
+              <div class="row">
+                <div class="col">
+                  <h5 class="card-title text-uppercase text-muted mb-0">Number of Blocked Domains</h5>
+                  <span class="h2 font-weight-bold mb-0">{{blockedDomains|length}}</span>
+                </div>
+                <div class="col-auto">
+                  <div class="icon icon-shape bg-gradient-danger text-white rounded-circle shadow">
+                    <i class="fa fa-ban"></i>
+                  </div>
+                </div>
+              </div>
+              <p class="mt-3 mb-0 text-sm">
+                <!-- <span class="text-success mr-2"><i class="fa fa-arrow-up"></i> 3.48%</span> -->
+                <!-- <span class="text-nowrap">Since last minute</span> -->
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<br>
+<br>
+<div class="container-fluid mt--7">
+  <div class="row mr--5">
+    <div class="col ml--4">
+      <div class="card bg-default shadow">
+        <div class="card-header bg-transparent">
+          <h3 class="mb-0 text-white text-center text-xl">All Running Domains</h3>
+        </div>
+        <div class="table-responsive" id="here">
+          <table class="table align-items-center table-dark table-flush">
+            <thead class="thead-dark">
+              <tr>
+                <th scope="col" class="text-lg w-100">Domains</th>
+                <th scope="col" class="text-lg w-100"><a href="" class="btn btn-info text-dark">Refresh</a></th>
+                <th scope="col"><button class="btn btn-danger" onclick="window.location='/block_all';">Block All</button></th>
+              </tr>
+            </thead>
+            <tbody>
+
+{% set x = 0 %}
+{% for domain in runningDomains %}
+              <tr id="{{x}}">
+                <td class="w-100">
+                  <div class="d-flex px-2 py-1 align-items-center">
+                    <div class="icon icon-shape icon-sm me-3 bg-gradient-dark shadow text-center">
+                      <i class="ni ni-world-2 text-white opacity-10"></i>
+                    </div>&nbsp&nbsp&nbsp
+                    <div class="ms-4">
+                      <h6 class="text-lg mb-0 text-white">{{domain}}</h6>
+                    </div>
+                  </div>
+                </td class="w-100">
+                <td class="w-100"></td>
+                <td class="d-flex justify-content-end text-lg">
+                  <div class="col text-center">
+                    <button class="btn btn-danger" onclick="window.location='/block_it2/{{domain}}{{x}}';">Block</button>
+                  </div>
+                </td>
+              </tr>
+
+{% set x=x+1 %}
+{% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+{% endblock content %}
+
+<!-- Specific JS goes HERE -->
+{% block javascripts %}
+
+<script src="/static/assets/vendor/clipboard/dist/clipboard.min.js"></script>
+
+{% endblock javascripts %}

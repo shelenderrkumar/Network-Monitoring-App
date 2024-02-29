@@ -1,0 +1,55 @@
+  <nav class="h-auto sidenav navbar navbar-vertical  fixed-left  navbar-expand-xs navbar-dark bg-dark" id="sidenav-main">
+  <div class="scrollbar-inner">
+    <!-- Brand -->
+    <div class="sidenav-header  align-items-center">
+      <a class="navbar-brand" href="/">
+        <img src="/static/assets/img/brand/blue.jpg" class="navbar-brand-img w-50" alt="Team ASH">
+      </a>
+    </div>
+    <div class="navbar-inner">
+      <!-- Collapse -->
+      <div id="sidenav-collapse-main">
+        <!-- Nav items -->
+        <ul class="navbar-nav">
+          <li class="nav-item">
+            <a class="nav-link {% if 'index' in segment %} text-orange {% endif %} " href="/">
+              <i class="ni ni-tv-2 text-primary"></i>
+              <span class="nav-link-text">Dashboard</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {% if 'runnings' in segment %} text-orange {% endif %}" href="/runnings.html">
+              <i class="ni ni-planet text-orange"></i>
+              <span class="nav-link-text">Running Domains</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {% if 'blocked' in segment %} text-orange {% endif %}" href="/blocked.html">
+              <i class="ni ni-pin-3 text-primary"></i>
+              <span class="nav-link-text">Blocked Domains</span>
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {% if 'profile' in segment %} text-orange {% endif %}" href="/profile.html">
+              <i class="ni ni-single-02 text-yellow"></i>
+              <span class="nav-link-text">Profile</span>
+            </a>
+          </li>
+          <!-- <li class="nav-item">
+            <a class="nav-link {% if 'charts' in segment %} text-orange {% endif %}" href="/charts.html">
+              <i class="ni ni-bullet-list-67 text-default"></i>
+              <span class="nav-link-text">Charts</span>
+            </a>
+          </li> -->
+
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('authentication_blueprint.logout') }}">
+              <i class="ni ni-user-run text-red"></i>
+              <span class="nav-link-text">Logout</span>
+            </a>
+          </li>            
+        </ul>
+      </div>
+    </div>
+  </div>
+</nav>
