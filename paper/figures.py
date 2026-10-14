@@ -1,6 +1,6 @@
 """Publication figures for the paper (vector PDF, sized for an ACM single column).
 
-    python paper/figures.py      # reads bench/results/*.csv, writes paper/figures/*.pdf
+python paper/figures.py      # reads bench/results/*.csv, writes paper/figures/*.pdf
 """
 
 import csv
@@ -71,8 +71,14 @@ def time_to_block():
     ax.set_xlabel("Time from ClientHello to kernel block")
     ax.set_ylabel("CDF of trials")
     ax.grid(True, which="major", lw=0.3, alpha=0.5)
-    ax.legend(loc="lower center", bbox_to_anchor=(0.5, 1.0), frameon=False, ncol=1,
-              borderaxespad=0.2, handlelength=2.2)
+    ax.legend(
+        loc="lower center",
+        bbox_to_anchor=(0.5, 1.0),
+        frameon=False,
+        ncol=1,
+        borderaxespad=0.2,
+        handlelength=2.2,
+    )
     fig.tight_layout(pad=0.2)
     fig.savefig(OUT / "time_to_block.pdf")
 
@@ -84,9 +90,7 @@ def scaling():
         if r["experiment"] == "E3-scale" and r["filter"] != "none":
             e3[r["filter"]][int(r["blocklist"])].append(int(r["pps"]) / 1e3)
     baseline = statistics.mean(
-        int(r["pps"]) / 1e3
-        for r in rows
-        if r["experiment"] == "E3-scale" and r["filter"] == "none"
+        int(r["pps"]) / 1e3 for r in rows if r["experiment"] == "E3-scale" and r["filter"] == "none"
     )
     fig, ax = plt.subplots(figsize=(COLUMN, 1.8))
     for kind, label, color, marker in (
@@ -97,8 +101,9 @@ def scaling():
         sizes = sorted(e3[kind])
         means = [statistics.mean(e3[kind][s]) for s in sizes]
         errs = [statistics.stdev(e3[kind][s]) for s in sizes]
-        ax.errorbar(sizes, means, yerr=errs, marker=marker, ms=3, capsize=2, lw=1, color=color,
-                    label=label)
+        ax.errorbar(
+            sizes, means, yerr=errs, marker=marker, ms=3, capsize=2, lw=1, color=color, label=label
+        )
     ax.axhline(baseline, color=GREY, ls=":", lw=0.9, label="no filter")
     ax.set_xscale("log")
     ax.set_ylim(0, 560)
@@ -117,8 +122,12 @@ def drop_table():
     groups = defaultdict(list)
     for r in rows:
         groups[r["filter"]].append(int(r["pps"]) / 1e3)
-    names = {"xdp": "XDP drop (native)", "nft": "nftables \\texttt{netdev} ingress drop",
-             "iptables": "iptables \\texttt{INPUT} drop", "none": "No filter (delivered to socket)"}
+    names = {
+        "xdp": "XDP drop (native)",
+        "nft": "nftables \\texttt{netdev} ingress drop",
+        "iptables": "iptables \\texttt{INPUT} drop",
+        "none": "No filter (delivered to socket)",
+    }
     lines = []
     for kind in ("xdp", "nft", "iptables", "none"):
         v = groups[kind]
