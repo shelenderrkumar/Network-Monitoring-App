@@ -1,0 +1,38 @@
+[project]
+name = "dpiguard"
+version = "2.0.0"
+description = "DPI-guided domain blocking enforced in the Linux kernel with XDP."
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Shelender Kumar" }]
+requires-python = ">=3.10"
+dependencies = ["nfstream>=6.5", "flask>=3.0"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6"]
+bench = ["matplotlib>=3.8"]
+
+[project.scripts]
+dpiguard = "dpiguard.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["dpiguard*"]
+
+[tool.setuptools.package-data]
+dpiguard = ["bpf/*.c", "static/*.html"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["privileged: needs root, clang and iproute2 (real XDP on a veth pair)"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+extend-exclude = ["bench/results"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
