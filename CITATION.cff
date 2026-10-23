@@ -1,0 +1,9 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "DPI Guard: DPI-guided domain blocking enforced with eBPF/XDP"
+authors:
+  - family-names: Kumar
+    given-names: Shelender
+repository-code: "https://github.com/shelenderrkumar/Network-Monitoring-App"
+license: MIT
+type: software
