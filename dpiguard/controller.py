@@ -95,7 +95,7 @@ class Controller:
             self.enforcer.unblock(ip)
         return sorted(ips)
 
-    def snapshot(self) -> dict:
+    def snapshot(self, events_limit: int | None = 50) -> dict:
         return {
             "rules": self.policy.rules,
             "domains": self.stats.top(),
@@ -104,7 +104,7 @@ class Controller:
             "blocked": self.enforcer.blocked(),
             "kernel": self.enforcer.totals(),
             "collateral": self.policy.collateral(),
-            "events": [asdict(e) for e in list(self.events)[-50:]],
+            "events": [asdict(e) for e in list(self.events)[-(events_limit or 0) :]],
             "enforcer": self.enforcer.name,
         }
 

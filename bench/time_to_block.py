@@ -118,7 +118,7 @@ def restart_server(delay_ms):
 
 
 def state(port):
-    with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/state") as r:
+    with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/state?events=all") as r:
         return json.load(r)
 
 
