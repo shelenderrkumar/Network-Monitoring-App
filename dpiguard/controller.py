@@ -10,6 +10,9 @@ Three decision modes (compared in the evaluation):
   connection's 4th packet. Limited by libpcap's buffered capture (0-1 s delay).
 * ``fastpath`` - a filtered AF_PACKET socket parses the TLS ClientHello the moment it is
   sent (see ``fastpath.py``); NFStream still runs for statistics and other protocols.
+  When the fast path cannot read the name (a ClientHello split across segments, QUIC),
+  the per-packet plugin of ``early`` mode is the fallback (``fallback="early"``), or,
+  as in the first version, flow export (``fallback="expiry"``).
 """
 
 import logging
@@ -130,14 +133,19 @@ def run_capture(
     idle_timeout: int = 5,
     active_timeout: int = 120,
     stop: threading.Event | None = None,
+    fallback: str = "early",
 ) -> None:
     """Capture on ``iface`` until ``stop`` is set (blocking; run it in a thread)."""
     from nfstream import NFStreamer
 
     if mode not in {"early", "expiry", "fastpath"}:
         raise ValueError("mode must be 'early', 'expiry' or 'fastpath'")
+    if fallback not in {"early", "expiry"}:
+        raise ValueError("fallback must be 'early' or 'expiry'")
     stop = stop or threading.Event()
-    queue = mp.get_context("fork").Queue() if mode == "early" else None
+    per_packet = mode == "early" or (mode == "fastpath" and fallback == "early")
+    queue = mp.get_context("fork").Queue() if per_packet else None
+    label = "early" if mode == "early" else "fallback"
 
     def consume_early_events():
         while not stop.is_set():
@@ -145,7 +153,7 @@ def run_capture(
                 name, ip, detected_at = queue.get(timeout=0.5)
             except Exception:
                 continue
-            controller.on_server_name(name, ip, detected_at, "early")
+            controller.on_server_name(name, ip, detected_at, label)
 
     if queue is not None:
         threading.Thread(target=consume_early_events, daemon=True).start()

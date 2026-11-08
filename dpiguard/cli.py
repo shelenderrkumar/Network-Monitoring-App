@@ -27,6 +27,12 @@ def main(argv=None) -> None:
     parser.add_argument("--enforcer", choices=["xdp", "nft", "memory"], default="xdp")
     parser.add_argument("--xdp-mode", choices=["drv", "generic"], default="drv")
     parser.add_argument("--mode", choices=["fastpath", "early", "expiry"], default="fastpath")
+    parser.add_argument(
+        "--fastpath-fallback",
+        choices=["early", "expiry"],
+        default="early",
+        help="how names the fast path cannot read are caught: per-packet plugin or flow export",
+    )
     parser.add_argument("--idle-timeout", type=int, default=5)
     parser.add_argument("--block", action="append", default=[], help="initial rule (repeatable)")
     parser.add_argument("--host", default="127.0.0.1")
@@ -56,7 +62,7 @@ def main(argv=None) -> None:
     threading.Thread(
         target=run_capture,
         args=(controller, args.iface, args.mode, args.idle_timeout),
-        kwargs={"stop": stop},
+        kwargs={"stop": stop, "fallback": args.fastpath_fallback},
         daemon=True,
     ).start()
     create_app(controller).run(host=args.host, port=args.port, threaded=True)

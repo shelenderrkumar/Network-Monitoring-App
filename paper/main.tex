@@ -15,11 +15,13 @@
 
 \newcommand{\sys}{DPI Guard}
 \newcommand{\todo}[1]{\textcolor{red}{[TODO: #1]}}
+% Every number below that comes from the time-to-block experiments is generated from the raw
+% CSVs by figures.py, so the text cannot drift from the data.
+\input{figures/numbers.tex}
 
 \begin{document}
 
 \title{Blocking the First Connection: Where the Time Goes in DPI-Guided XDP Enforcement}
-\subtitle{Draft for internal review}
 
 \author{Shelender Kumar}
 \affiliation{%
@@ -178,9 +180,11 @@ gateway. Global counters live in a per-CPU array, so the hot path takes no share
 socket with a 28-instruction classic-BPF filter that accepts only IPv4 TCP segments to port 443
 whose payload begins with a TLS handshake record of type ClientHello; user space therefore
 wakes only for connection openings, parses the SNI and reports (name, server IP) at once.
-\emph{NFStream with nDPI} inspects all traffic, keeps per-domain statistics, and acts as a
-fallback for names the fast path cannot see (QUIC, DNS, HTTP, a ClientHello split across
-segments).
+\emph{NFStream with nDPI} inspects all traffic and keeps per-domain statistics. It is also the
+fallback for names the fast path cannot read (QUIC, DNS, HTTP, a ClientHello whose server name
+falls in a later TCP segment): a plugin that runs on every packet reports a name as soon as nDPI
+has reassembled it. Our first version fell back to flow export instead; \S\ref{sec:split}
+shows the difference.
 
 \textbf{Policy.} A rule such as \texttt{youtube.com} matches the name and all subdomains; the
 most specific rule wins. The controller remembers every observed (domain, IP) pair, so adding a
@@ -205,12 +209,24 @@ network namespace reaches the host through a veth pair; filters attach to the ho
 interface (XDP in native mode). A TLS~1.3 server in the namespace answers one HTTP request per
 connection.
 
-\textbf{Time-to-block (\S\ref{sec:ttb}).} For each decision mode we run 30 trials. Trial $i$
+\textbf{Time-to-block (\S\ref{sec:ttb}).} For each configuration we run 100 trials. Trial $i$
 connects to its own server address with SNI \texttt{t$i$.blocked.test}, so earlier blocks never
 affect later trials. The client records the time just before sending its ClientHello; \sys{}
 records when it wrote the IP to the XDP map. Their difference is the \emph{time-to-block}.
-Every trial is paired with a control connection to an allowed name on another address, which
-must succeed.
+A first connection counts as \emph{stopped} if its TLS handshake or HTTP exchange fails within
+\SI{2}{\second}. Every trial is paired with a control connection to an allowed name on another
+address, which must succeed. We report medians with 95\% percentile-bootstrap confidence
+intervals and proportions with 95\% Wilson intervals.
+
+\textbf{Emulated round-trip time (\S\ref{sec:rtt}).} Our kernel lacks the \texttt{netem} queueing
+discipline, so the server emulates distance itself: it waits $D$ milliseconds after accepting a
+connection before reading the ClientHello and replying. For a blocker next to the client, which
+is where \sys{} runs, the server's first reply then arrives $D$ after the ClientHello, as it
+would with a round-trip time of $D$. We sweep $D$ from 5 to \SI{1000}{\milli\second}.
+
+\textbf{Split ClientHello (\S\ref{sec:split}).} Large ClientHellos, such as those with
+post-quantum key shares, span several TCP segments. We emulate this by sending the first 100
+bytes of the ClientHello in their own segment, which places the server name in the second.
 
 \textbf{Drop cost and scaling (\S\ref{sec:cost}).} A C sender (\texttt{sendmmsg}, batches of 64
 UDP packets, 64-byte frames) floods the host for \SI{5}{\second} while pinned to one vCPU. On a
@@ -322,14 +338,17 @@ strictly as the filter itself.
 name sharing a CDN address with a blocked one is blocked too; \sys{} reports but cannot avoid
 this~\cite{hoang}. \emph{Hidden names:} ECH~\cite{ech} hides the SNI and encrypted DNS hides
 the query. \emph{Large ClientHellos:} post-quantum hybrid key shares can push the ClientHello
-past one TCP segment; the fast path parses only the first segment and falls back to NFStream
-otherwise. \emph{QUIC:} the fast path handles TCP only; QUIC Initial packets are encrypted with
+past one TCP segment; the fast path parses only the first segment, and when the name is not in
+it, enforcement falls back to the plugin's sub-second delay (\S\ref{sec:split}). Reassembling
+the ClientHello in the fast path would close this gap. \emph{QUIC:} the fast path handles TCP only; QUIC Initial packets are encrypted with
 keys derived from public values, so a QUIC fast path is feasible but not yet built.
 
 \textbf{Threats to validity.} All measurements come from one virtual machine on a veth pair
-with sub-millisecond RTT, which hides XDP's main advantage and adds a NAPI step of its own. IPv6
-was disabled in the kernel, so only IPv4 was measured. Client and controller timestamps share
-one clock. Samples are 30 trials per time-to-block mode and 5 runs per throughput point.
+with sub-millisecond RTT, which hides XDP's main advantage and adds a NAPI step of its own. Round-trip
+time is emulated by delaying the server's reply, not the network, so it does not model loss or
+queueing. IPv6 was disabled in the kernel, so only IPv4 was measured. Client and controller
+timestamps share one clock. Samples are 100 trials per time-to-block configuration and 5 runs
+per throughput point.
 
 %% ---------------------------------------------------------------------------------------
 \section{Conclusion}
