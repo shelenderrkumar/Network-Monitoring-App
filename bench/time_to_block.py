@@ -20,6 +20,7 @@ Usage (root, after testbed.sh):  python bench/time_to_block.py --trials 100
 import argparse
 import csv
 import json
+import random
 import statistics
 import subprocess
 import sys
@@ -155,11 +156,14 @@ def run_mode(spec, trials, idle_timeout, port, delay_ms=0, split=0):
                 time.sleep(0.1)
         time.sleep(3)  # let NFStream start capturing
         results = []
+        gaps = random.Random(f"{spec}/{delay_ms}/{split}")
         for i in range(1, trials + 1):
             blocked = client(f"10.0.1.{i}", f"t{i}.blocked.test", split)
             control = client(f"10.0.2.{i}", f"c{i}.allowed.test", split)
             results.append((i, blocked, control))
-            time.sleep(0.25)
+            # Random gap so trial starts do not phase-lock with periodic timers in the
+            # capture path (libpcap releases its buffer on a ~1 s timer).
+            time.sleep(gaps.uniform(0.25, 1.25))
         time.sleep(idle_timeout + 4)  # let expiry-mode decisions land
         events = {e["ip"]: e for e in state(port)["events"]}
     finally:

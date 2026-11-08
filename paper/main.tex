@@ -213,7 +213,9 @@ connection.
 connects to its own server address with SNI \texttt{t$i$.blocked.test}, so earlier blocks never
 affect later trials. The client records the time just before sending its ClientHello; \sys{}
 records when it wrote the IP to the XDP map. Their difference is the \emph{time-to-block}.
-A first connection counts as \emph{stopped} if its TLS handshake or HTTP exchange fails within
+Consecutive trials are separated by a random gap of 0.25--\SI{1.25}{\second}, so their start
+times cannot phase-lock with periodic timers in the capture path. A first connection counts as
+\emph{stopped} if its TLS handshake or HTTP exchange fails within
 \SI{2}{\second}. Every trial is paired with a control connection to an allowed name on another
 address, which must succeed. We report medians with 95\% percentile-bootstrap confidence
 intervals and proportions with 95\% Wilson intervals.
