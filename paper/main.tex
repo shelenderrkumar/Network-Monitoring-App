@@ -33,15 +33,20 @@
 Gateways that block domains must turn names seen by deep packet inspection (DPI) into packet
 drops on IP addresses. We ask how long that takes and whether the first connection to a blocked
 domain gets through. We built \sys{}, which couples NFStream/nDPI flow inspection with an
-eBPF/XDP blocklist, and measured three decision strategies on a Linux testbed. Acting when a
-flow is exported blocked domains a median of \SI{5.8}{\second} after the ClientHello and never
-stopped the first connection; on a quiet link, 11 of 30 flows were never acted on. Acting on
-every packet inside the DPI engine cut the median to \SI{489}{\milli\second}, a delay we trace to
-buffered packet capture rather than to classification. A fast path that parses only TLS
-ClientHellos from an unbuffered, BPF-filtered socket blocked domains \SI{0.81}{\milli\second}
-after the ClientHello and stopped 30 of 30 first connections. The XDP hash-map blocklist kept a
-constant per-packet cost from 1 to \num{10000} entries, while linear iptables rules lost 98\% of
-their throughput. We release the system, the testbed and all raw measurements.
+eBPF/XDP blocklist, and measured three decision strategies on a Linux testbed, 100 trials each.
+Acting when a flow is exported blocked domains a median of \SI{\medExp}{\milli\second} after the
+ClientHello and never stopped the first connection; on a quiet link some flows were never acted
+on. Acting on every packet inside the DPI engine cut the median to \SI{\medEarly}{\milli\second},
+a delay we trace to buffered packet capture rather than to classification; across emulated
+round-trip times of 5 to \SI{1000}{\milli\second} it stopped only the fraction of first
+connections that this delay predicts, \sweepEarlyhundred\% at \SI{100}{\milli\second}. A fast
+path that parses only TLS ClientHellos from an unbuffered, BPF-filtered socket blocked domains
+\SI{\medFast}{\milli\second} after the ClientHello and stopped every first connection at every
+round-trip time. When the server name spans two TCP segments, falling back to the per-packet
+path instead of flow export cuts enforcement from about \SI{6}{\second} to half a second. The XDP
+hash-map blocklist kept a constant per-packet cost from 1 to \num{10000} entries, while linear
+iptables rules lost 98\% of their throughput. We release the system, the testbed and all raw
+measurements.
 \end{abstract}
 
 \keywords{eBPF, XDP, deep packet inspection, TLS SNI, packet filtering, measurement}
@@ -72,22 +77,26 @@ decision strategies. Our main finding is that the dominant delay is neither DPI 
 but how packets reach user space:
 \begin{itemize}
   \item Acting when a flow is \emph{exported} waits for the flow's idle timeout, so the first
-        connection always completes (median time-to-block \SI{5.8}{\second}); on a quiet link
-        the flow may never be exported.
+        connection always completes (median time-to-block \SI{\medExp}{\milli\second}); on a
+        quiet link the flow may never be exported.
   \item Acting in a \emph{per-packet} DPI hook is faster, but buffered libpcap capture delivers
         packets in blocks on a timer, adding a uniform 0--\SI{1}{\second} delay (median
-        \SI{489}{\milli\second}).
+        \SI{\medEarly}{\milli\second}). At an emulated \SI{100}{\milli\second} round-trip time
+        it stops only \sweepEarlyhundred\% of first connections.
   \item A \emph{fast path}, a filtered \texttt{AF\_PACKET} socket that wakes only for TLS
-        ClientHellos, reduces time-to-block to \SI{0.81}{\milli\second}; the server's first
-        reply is dropped and every first connection fails.
+        ClientHellos, reduces time-to-block to \SI{\medFast}{\milli\second}; the server's
+        first reply is dropped and every first connection fails, at every round-trip time we
+        tested.
 \end{itemize}
 
 \noindent\textbf{Contributions.} (1)~The design and implementation of a DPI-guided XDP domain
 blocker with a two-path architecture and a header-free user-space controller that drives BPF
 maps through the \texttt{bpf(2)} system call (\S\ref{sec:design}). (2)~A measurement of
 time-to-block for three decision strategies that identifies capture buffering as the dominant
-delay (\S\ref{sec:ttb}). (3)~A comparison of drop cost and blocklist scaling for XDP hash maps,
-nftables sets and iptables rules (\S\ref{sec:cost}). (4)~A policy model that maps domain rules
+delay, and shows how it decides whether the first connection survives across round-trip times
+(\S\ref{sec:ttb}, \S\ref{sec:rtt}). (3)~A fallback design for ClientHellos the fast path cannot
+read, measured against the original (\S\ref{sec:split}). (4)~A comparison of drop cost and blocklist scaling for XDP hash maps,
+nftables sets and iptables rules (\S\ref{sec:cost}). (5)~A policy model that maps domain rules
 to IP addresses with exact unblocking and reports collateral blocking (\S\ref{sec:design}).
 
 %% ---------------------------------------------------------------------------------------
@@ -164,6 +173,7 @@ names it observes, and an XDP program in the kernel drops their packets
   \draw[arr, <->] (ui) -- (ctl);
   \draw[arr] (stk.east) -- ++(0.3,0) |- (fast.east);
 \end{tikzpicture}
+\Description{Architecture: a fast path and NFStream observe server names in user space and feed a controller, which writes IP addresses to BPF maps that an XDP program in the kernel consults to drop packets.}
 \caption{\sys{} architecture. Two taps observe server names; the controller turns domain rules
 into IP addresses and writes them to pinned BPF maps that the XDP program consults.}
 \label{fig:arch}
@@ -247,37 +257,91 @@ deviation.
 \begin{figure}[t]
   \centering
   \includegraphics[width=\columnwidth]{figures/time_to_block.pdf}
-  \caption{Time from the client's ClientHello to the kernel block, 30 trials per mode. The
-  expiry curve stops at 19/30: the remaining flows were never exported.}
+  \Description{Cumulative distribution of time-to-block on a log scale: the fast path is below 3 ms, the plugin spread between about 5 ms and 1 s, and flow expiry between 5 and 7 s.}
+  \caption{Time from the client's ClientHello to the kernel block, \nFast{} trials per mode. The
+  expiry curve stops at \enforcedExp/\nExp: the remaining flows were never exported.}
   \label{fig:ttb}
 \end{figure}
 
-Figure~\ref{fig:ttb} shows the distribution of time-to-block for each mode.
+Figure~\ref{fig:ttb} shows the distribution of time-to-block for each mode, with no added
+delay.
 
 \textbf{Flow expiry} acts only after the connection has ended and stayed idle for the
-\SI{5}{\second} timeout. Every first connection completed, and the block landed
-5.3--\SI{6.3}{\second} after the ClientHello. NFStream checks for idle flows only when new
-packets arrive: the last 11 trials, after which the link went quiet, were never enforced during
-the \SI{9}{\second} observation window. On a quiet link, export-based enforcement has no upper
+\SI{5}{\second} timeout. Every first connection completed (\stoppedExp/\nExp{} stopped), and the
+block landed a median of \SI{\medExp}{\milli\second} (95\% CI \numrange{\loExp}{\hiExp}) after
+the ClientHello. NFStream checks for idle flows only when new packets arrive: \enforcedExp{} of
+\nExp{} flows were enforced within the observation window, and the rest, from the last trials
+before the link went quiet, never were. On a quiet link, export-based enforcement has no upper
 bound.
 
 \textbf{The NFStream plugin} sees the server name on the connection's fourth packet, yet the
-block landed 25--\SI{999}{\milli\second} after the ClientHello (median \SI{489}{\milli\second}).
-Almost all of this delay lies between a packet's capture timestamp and the plugin call, and it
-is spread evenly over 0--\SI{1}{\second}: the signature of a capture buffer released on a
-timer. Classification and the map update take well under a millisecond.
+block landed \SIrange{\minEarly}{\maxEarly}{\milli\second} after the ClientHello (median
+\SI{\medEarly}{\milli\second}, 95\% CI \numrange{\loEarly}{\hiEarly}). Almost all of this delay
+lies between a packet's capture timestamp and the plugin call, and it is spread evenly over
+0--\SI{1}{\second}: the signature of a capture buffer released on a timer. Classification and
+the map update take well under a millisecond. With no added delay the server replies first, so
+\stoppedEarly/\nEarly{} first connections were stopped.
 
-\textbf{The fast path} removes the buffer: the block landed 0.67--\SI{1.91}{\milli\second}
-after the ClientHello (median \SI{0.81}{\milli\second}; \SI{0.27}{\milli\second} from frame
-arrival to map update). The server's first reply was dropped, so all 30 first connections
-failed. All 90 control connections succeeded.
+\textbf{The fast path} removes the buffer: the block landed
+\SIrange{\minFast}{\maxFast}{\milli\second} after the ClientHello (median
+\SI{\medFast}{\milli\second}, 95\% CI \numrange{\loFast}{\hiFast};
+\SI{\medFastDetect}{\milli\second} from frame arrival to map update). The server's first reply
+was dropped, so \stoppedFast/\nFast{} first connections failed. All \controlsAll{} control
+connections succeeded.
 
-On our testbed the server answers in well under a millisecond, so even a \SI{25}{\milli\second}
-block arrives too late for the plugin. Over the Internet, round-trip times of tens of
-milliseconds give the fast path a wide margin, while the plugin stops a first connection only
-when its 0--\SI{1}{\second} delay happens to be shorter than the RTT.
-\todo{Repeat with emulated server delays of 5--\SI{100}{\milli\second} and plot the fraction of
-first connections stopped against RTT.}
+\subsection{Does the First Connection Survive Distance?}
+\label{sec:rtt}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\columnwidth]{figures/rtt_sweep.pdf}
+  \Description{Fraction of first connections stopped versus emulated round-trip time: the fast path stays at 100 percent; the plugin rises from near zero to 100 percent only at 1 s, matching its predicted curve.}
+  \caption{Fraction of first connections stopped against the emulated round-trip time
+  (\sweepN{} trials per point, 95\% Wilson intervals). The dotted line predicts the plugin's
+  curve from its zero-delay time-to-block alone.}
+  \label{fig:rtt}
+\end{figure}
+
+A block stops the first connection only if it lands before the server's reply, so the answer
+depends on the round-trip time (RTT). Figure~\ref{fig:rtt} sweeps the emulated RTT from 5 to
+\SI{1000}{\milli\second}. The fast path stopped \sweepFastfive/\sweepN{} first connections at
+every RTT, including \SI{5}{\milli\second}. The plugin stopped \sweepEarlyfifty/\sweepN{} at
+\SI{50}{\milli\second}, \sweepEarlyhundred/\sweepN{} at \SI{100}{\milli\second},
+\sweepEarlyfivehundred/\sweepN{} at \SI{500}{\milli\second} and \sweepEarlythousand/\sweepN{}
+only at \SI{1}{\second}. Its curve follows the prediction from Figure~\ref{fig:ttb}, i.e.\ the
+fraction of zero-delay trials blocked within the RTT, inside the confidence interval at every
+point: the plugin's chance of stopping a first connection is set by the capture buffer's timer,
+not by the network. At the RTTs common on the Internet, tens to a few hundred milliseconds, the
+plugin lets most first connections through and the fast path lets none through. All
+\sweepControls{} control connections succeeded.
+
+\subsection{When the Fast Path Cannot Read the Name}
+\label{sec:split}
+
+\begin{table}[t]
+  \caption{Time-to-block when the server name arrives in the ClientHello's second TCP segment
+  (median, 95\% CI; 100 trials per row).}
+  \label{tab:split}
+  \small
+  \setlength{\tabcolsep}{3pt}
+  \begin{tabular}{@{}lrll@{}}
+    \toprule
+    Fallback & RTT (ms) & Time-to-block & Stopped \\
+    \midrule
+    \csname @@input\endcsname figures/split_table.tex
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+When the server name falls in the ClientHello's second segment, the fast path sees the first
+segment, finds no name and stays silent; the fallback decides. Table~\ref{tab:split} compares
+our first design, which fell back to flow export, with the current one, which falls back to the
+per-packet plugin once nDPI has reassembled the ClientHello. The plugin fallback cuts the
+time-to-block by more than a factor of ten, from about \SI{6}{\second} to about half a second,
+and enforces every trial; the export fallback missed some flows on the quiet link, as in
+\S\ref{sec:ttb}. Neither stops many first connections, so ClientHellos that span segments remain
+the fast path's main gap (\S\ref{sec:discussion}). All \splitControls{} control connections
+succeeded.
 
 \subsection{Drop Cost and Blocklist Scaling}
 \label{sec:cost}
@@ -306,6 +370,7 @@ remains to be measured on our hardware.
 \begin{figure}[t]
   \centering
   \includegraphics[width=\columnwidth]{figures/scaling.pdf}
+  \Description{Allowed traffic versus blocklist size: XDP and nftables stay flat from 1 to 10,000 entries while iptables falls steeply.}
   \caption{Allowed traffic forwarded while $N$ non-matching addresses are blocked (mean
   $\pm$ SD, 5 runs).}
   \label{fig:scaling}
@@ -331,9 +396,9 @@ fixes both. Latency-critical decisions in monitoring systems need their own capt
 
 \textbf{An operational lesson.} NFStream's meter processes ignore \texttt{SIGTERM}. When our
 controller exited, they survived as orphans that kept capturing. While they ran, packets from
-blocked addresses intermittently bypassed the native-mode XDP program on our veth testbed and
-0/30 first connections were stopped; after the controller force-killed its children, 30/30 were
-stopped. We have not determined the kernel mechanism; capture processes must be supervised as
+blocked addresses intermittently bypassed the native-mode XDP program on our veth testbed: in a 30-trial run
+of an earlier version, 0/30 first connections were stopped; after the controller force-killed
+its children, 30/30 were. We have not determined the kernel mechanism; capture processes must be supervised as
 strictly as the filter itself.
 
 \textbf{Limitations.} \emph{Collateral blocking:} enforcement is per address, so an allowed
@@ -356,13 +421,14 @@ per throughput point.
 \section{Conclusion}
 
 A DPI-guided blocker is only as fast as the path that carries packets to its classifier.
-Acting on exported flows took \SI{5.8}{\second} and never stopped a first connection; acting
-inside the DPI engine took \SI{489}{\milli\second} because of capture buffering; a ClientHello
-fast path took \SI{0.81}{\milli\second} and stopped all first connections, while the XDP
-blocklist kept a constant cost from 1 to \num{10000} entries. Future work: bare-metal runs with
-native-XDP NICs, collateral measurements on real CDN-hosted domains, a QUIC fast path, and
-connection-level enforcement to avoid collateral blocking. Code, testbed and data are
-available~\cite{dpiguard}.
+Acting on exported flows took \SI{\medExp}{\milli\second} and never stopped a first connection;
+acting inside the DPI engine took \SI{\medEarly}{\milli\second} because of capture buffering,
+and stopped first connections only as often as that delay predicts; a ClientHello fast path
+took \SI{\medFast}{\milli\second} and stopped every first connection at every round-trip time,
+while the XDP blocklist kept a constant cost from 1 to \num{10000} entries. Future work:
+reassembling multi-segment ClientHellos in the fast path, bare-metal runs with native-XDP NICs,
+collateral measurements on real CDN-hosted domains, a QUIC fast path, and connection-level
+enforcement to avoid collateral blocking. Code, testbed and data are available~\cite{dpiguard}.
 
 \bibliographystyle{ACM-Reference-Format}
 \bibliography{refs}

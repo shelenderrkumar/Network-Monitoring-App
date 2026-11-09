@@ -134,8 +134,8 @@ def rtt_sweep():
             k, n = stopped(sub), len(sub)
             a, b = wilson(k, n)
             ps.append(k / n)
-            lo.append(k / n - a)
-            hi.append(b - k / n)
+            lo.append(max(0.0, k / n - a))
+            hi.append(max(0.0, b - k / n))
         ax.errorbar(
             xs, ps, yerr=[lo, hi], marker=marker, ms=3, capsize=2, lw=1, color=color, label=label
         )
@@ -147,7 +147,7 @@ def rtt_sweep():
     ax.set_xlabel("Emulated round-trip time to the server (ms)")
     ax.set_ylabel("First connections stopped")
     ax.grid(True, which="major", lw=0.3, alpha=0.5)
-    ax.legend(loc="center right", frameon=False, borderaxespad=0.3)
+    ax.legend(loc="center left", frameon=False, borderaxespad=0.3)
     fig.tight_layout(pad=0.2)
     fig.savefig(OUT / "rtt_sweep.pdf")
 
@@ -156,15 +156,15 @@ def split_table():
     """Time-to-block when the server name arrives in the ClientHello's second segment."""
     rows = read("split_hello.csv")
     names = {
-        "fastpath": "Fast path, plugin fallback (v2)",
-        "fastpath:expiry": "Fast path, flow-export fallback",
+        "fastpath": "Per-packet plugin (v2)",
+        "fastpath:expiry": "Flow export (v1)",
     }
     lines = []
     for mode in ("fastpath", "fastpath:expiry"):
         for d in sorted({int(r["delay_ms"]) for r in rows}):
             sub = [r for r in rows if r["mode"] == mode and int(r["delay_ms"]) == d]
             med, lo, hi = median_ci(ttb(sub))
-            fmt = (lambda v: f"{v / 1000:.1f}\,s") if med >= 1000 else (lambda v: f"{v:.0f}\,ms")
+            fmt = (lambda v: rf"{v / 1000:.1f}\,s") if med >= 1000 else (lambda v: rf"{v:.0f}\,ms")
             lines.append(
                 f"{names[mode]} & {d} & {fmt(med)} [{fmt(lo)}, {fmt(hi)}] & "
                 f"{stopped(sub)}/{len(sub)} \\\\"

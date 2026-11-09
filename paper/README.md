@@ -11,4 +11,4 @@ Requires TeX Live with `acmart`, `libertine`, `newtx`, `cm-super` (Ubuntu:
 `texlive-publishers texlive-fonts-extra texlive-latex-extra texlive-plain-generic cm-super`).
 The same folder can be imported into Overleaf as-is (upload `main.tex`, `refs.bib`, `figures/`).
 
-Red `[TODO: …]` markers flag text that waits on planned experiments.
+`bash paper/make_arxiv.sh` builds the PDF and packs `arxiv-submission.tar.gz` (source, `main.bbl`, figures).
