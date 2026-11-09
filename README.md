@@ -24,9 +24,12 @@ Measured on a Linux 6.18 testbed (details and raw data in `bench/`):
 
 | How the domain is acted on | Median time from ClientHello to kernel block | First connection stopped |
 |---|---|---|
-| When NFStream exports the flow (v1 design) | 5,806 ms (11 of 30 never acted on) | 0 / 30 |
-| NFStream per-packet plugin | 489 ms | 0 / 30 |
-| **Fast path (v2)** | **0.81 ms** | **30 / 30** |
+| When NFStream exports the flow (v1 design) | 5,940 ms (7 of 100 never acted on) | 0 / 100 |
+| NFStream per-packet plugin | 536 ms | 0 / 100 |
+| **Fast path (v2)** | **0.44 ms** | **100 / 100** |
+
+With an emulated 100 ms round-trip time to the server, the plugin stops only 12 of 100 first
+connections; the fast path stops all of them at every round-trip time from 5 ms to 1 s.
 
 The bottleneck was never DPI or the kernel: it was **packet capture buffering**. libpcap's
 buffered mode hands packets to user space in blocks on a ~1 s timer. A filtered `AF_PACKET`
