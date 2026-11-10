@@ -17,3 +17,4 @@ paper/*.log
 paper/*.out
 paper/build.log
 paper/arxiv-submission.tar.gz
+paper/main-review.pdf
