@@ -54,7 +54,10 @@ def create_app(controller: Controller, password: str | None = None) -> Flask:
     @app.get("/api/state")
     @protected
     def state():
-        return jsonify(controller.snapshot())
+        # ?events=all returns the whole event history (used by the evaluation harness);
+        # the dashboard only needs the latest 50.
+        limit = None if request.args.get("events") == "all" else 50
+        return jsonify(controller.snapshot(events_limit=limit))
 
     @app.post("/api/rules")
     @protected

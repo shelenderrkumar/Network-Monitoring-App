@@ -5,39 +5,39 @@
 ![eBPF](https://img.shields.io/badge/eBPF-XDP-orange)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-DPI Guard watches the traffic on a Linux interface, recognises which **domains** each connection
-goes to (TLS SNI, QUIC, DNS, HTTP, via nDPI), and blocks the ones you choose by dropping their
-packets in the **kernel's XDP hook**, before the network stack even sees them.
+DPI Guard recognises which **domain** each connection on a Linux interface goes to (TLS SNI,
+QUIC, DNS, HTTP, via nDPI) and blocks the ones you choose by dropping their packets in the
+kernel's **XDP hook**. It began as my final-year project at SEECS, NUST, and was rebuilt to
+answer one question: *how fast can a DPI-guided blocker act, and does it stop the very first
+connection?* The answer is that the delay comes from packet capture, not from DPI or the
+kernel: a narrow, unbuffered tap for TLS ClientHellos blocks a domain in under a millisecond and
+stops every first connection, while the usual capture paths let them all through.
 
-It started as my final-year project at SEECS, NUST, and was rebuilt to answer a research
-question: *how fast can a DPI-guided blocker act, and does it stop the very first connection?*
+## Results
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/dashboard-dark.png">
-  <img alt="DPI Guard dashboard: live domains, block rules, blocked IPs with kernel drop counters, collateral warning and enforcement log" src="docs/dashboard-light.png">
-</picture>
-<sub>Dashboard with sample data: the warning shows a blocked IP that also serves allowed domains.</sub>
+100 trials per path, on a Linux 6.18 virtual machine with a veth testbed. Every number below is
+computed from [`bench/results/time_to_block.csv`](bench/results/time_to_block.csv).
 
-## Key finding
+| How the domain is acted on | Median time from ClientHello to kernel block | First connections stopped | Never acted on |
+|---|---|---|---|
+| Flow export (v1 design) | 5,940 ms | 0 / 100 | 7 / 100 |
+| Per-packet DPI plugin | 535.7 ms | 0 / 100 | 0 / 100 |
+| **TLS ClientHello fast path (v2)** | **0.44 ms** | **100 / 100** | 0 / 100 |
 
-Measured on a Linux 6.18 testbed (details and raw data in `bench/`):
-
-| How the domain is acted on | Median time from ClientHello to kernel block | First connection stopped |
-|---|---|---|
-| When NFStream exports the flow (v1 design) | 5,806 ms (11 of 30 never acted on) | 0 / 30 |
-| NFStream per-packet plugin | 489 ms | 0 / 30 |
-| **Fast path (v2)** | **0.81 ms** | **30 / 30** |
-
-The bottleneck was never DPI or the kernel: it was **packet capture buffering**. libpcap's
-buffered mode hands packets to user space in blocks on a ~1 s timer. A filtered `AF_PACKET`
-socket that wakes only for TLS ClientHellos removes that delay.
+- **Round-trip time** ([`rtt_sweep.csv`](bench/results/rtt_sweep.csv)): with an emulated
+  100 ms round trip to the server, the plugin stops 12 of 100 first connections. The fast path
+  stops 100 of 100 at every round-trip time from 5 ms to 1,000 ms.
+- **Split ClientHello** ([`split_hello.csv`](bench/results/split_hello.csv)): when the server
+  name falls in the second TCP segment, the fast path cannot read it. Falling back to the
+  plugin blocks in a median of 465.8 ms; the old flow-export fallback took 5,847.5 ms.
+- **Blocklist size** ([`drop_cost.csv`](bench/results/drop_cost.csv)): an XDP hash map and an
+  nftables set forward allowed traffic at a flat rate from 1 to 10,000 blocked addresses, while
+  linear iptables rules fall from 435.0 to 8.596 kpps.
 
 ![Time to block per mode](docs/figures/time_to_block.svg)
 
-The blocklist itself scales: an XDP hash map (like an nftables set) keeps a constant per-packet
-cost from 1 to 10,000 blocked addresses, while linear iptables rules drop from 435 to 8.6 kpps.
-
-![Throughput vs blocklist size](docs/figures/scaling.svg)
+**Paper:** [*Blocking the First Connection: Where the Time Goes in DPI-Guided XDP
+Enforcement*](paper/main.pdf) (preprint; LaTeX source and figure scripts in [`paper/`](paper/)).
 
 ## How it works
 
@@ -96,16 +96,20 @@ sudo .venv/bin/dpiguard --iface eth0 --block youtube.com      # dashboard on htt
 
 API: `GET /api/state`, `POST /api/rules {"rule": "example.com"}`, `DELETE /api/rules/<rule>`.
 
-## Reproducing the evaluation
+## Reproducing the results
+
+Needs root on Linux. These are the exact commands behind `bench/results/`:
 
 ```bash
-sudo bench/testbed.sh                          # veth pair + namespace + TLS server
-sudo .venv/bin/python bench/time_to_block.py   # E1: time-to-block per mode
-sudo .venv/bin/python bench/drop_cost.py       # E2 + E3: drop cost and blocklist scaling
-pip install -e ".[bench]" && python bench/plot.py
+sudo bench/testbed.sh                     # veth pair + namespace + TLS server
+PY=.venv/bin/python
+sudo $PY bench/time_to_block.py --trials 100 --modes expiry,early,fastpath --delays 0 --out time_to_block.csv
+sudo $PY bench/time_to_block.py --trials 100 --modes early,fastpath --delays 5,10,25,50,100,250,500,1000 --out rtt_sweep.csv
+sudo $PY bench/time_to_block.py --trials 100 --modes fastpath,fastpath:expiry --delays 0,50 --split 100 --out split_hello.csv
+sudo $PY bench/drop_cost.py --runs 5 --seconds 5 --sizes 1,10,100,1000,10000
+pip install -e ".[bench]" && $PY bench/plot.py   # README figures -> docs/figures/
+$PY paper/figures.py                             # paper figures, tables and every number in the text
 ```
-
-Raw results are in `bench/results/`, and figures in `docs/figures/`.
 
 ## Testing
 
@@ -120,15 +124,16 @@ CI runs both: the privileged job runs the real-kernel tests on GitHub's Ubuntu r
 
 - Blocking is IP-based: shared hosting and CDNs cause collateral blocking (reported, not
   prevented), and Encrypted Client Hello (ECH) hides the SNI.
-- The fast path covers IPv4 TLS over TCP with the ClientHello in one segment; everything
-  else falls back to NFStream, with its capture delay.
+- The fast path covers IPv4 TLS over TCP and reads only the ClientHello's first segment.
+  Post-quantum key shares make multi-segment ClientHellos common; for those, enforcement falls
+  back to the plugin's sub-second delay (see the split-ClientHello result above).
 - Benchmarks ran in a virtual machine on veth interfaces, which hides XDP's main advantage
   on physical NICs (dropping before socket-buffer allocation).
 
 ## History
 
 Version 1 (the final-year project) was a Flask dashboard with BCC-compiled XDP and
-NFStream flow export. It is preserved in the git history (commit `7b8bbdd`). Version 2
+NFStream flow export. It is preserved in the git history (commit `e801fc4`). Version 2
 rewrote it around the findings above.
 
 ## License

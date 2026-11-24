@@ -1,4 +1,5 @@
-% Every entry was checked against the publisher, dblp or the authors' page (October 2026).
+% Every entry was checked against the publisher, dblp, the RFC Editor or the authors' page
+% (October-November 2026).
 % Fields that could not be confirmed (e.g. pages for BPF'93) are left out rather than guessed.
 
 @inproceedings{xdp,
@@ -111,9 +112,62 @@
 @misc{ech,
   author       = {Eric Rescorla and Kazuho Oku and Nick Sullivan and Christopher A. Wood},
   title        = {{TLS} Encrypted Client Hello},
-  howpublished = {IETF Internet-Draft draft-ietf-tls-esni-25},
-  year         = {2025},
-  note         = {Work in progress; replace with the RFC number once published}
+  howpublished = {RFC 9849},
+  month        = mar,
+  year         = {2026}
+}
+
+@misc{svcbech,
+  author       = {Benjamin M. Schwartz and Mike Bishop and Erik Nygren},
+  title        = {Bootstrapping {TLS} Encrypted {ClientHello} with {DNS} Service Bindings},
+  howpublished = {RFC 9848},
+  month        = mar,
+  year         = {2026}
+}
+
+@misc{doh,
+  author       = {Paul Hoffman and Patrick McManus},
+  title        = {{DNS} Queries over {HTTPS} ({DoH})},
+  howpublished = {RFC 8484},
+  month        = oct,
+  year         = {2018}
+}
+
+@misc{rpz,
+  author       = {Paul Vixie and Vernon Schryver},
+  title        = {{DNS} Response Policy Zones ({RPZ})},
+  howpublished = {IETF Internet-Draft draft-ietf-dnsop-dns-rpz-00},
+  month        = mar,
+  year         = {2017}
+}
+
+@misc{cilium,
+  author       = {{Cilium Authors}},
+  title        = {Locking Down External Access with {DNS}-Based Policies},
+  howpublished = {Cilium documentation, \url{https://docs.cilium.io/en/stable/security/dns/}},
+  note         = {Accessed November 2026}
+}
+
+@misc{chromemlkem,
+  author       = {{Google Online Security Blog}},
+  title        = {A New Path for {Kyber} on the Web},
+  howpublished = {\url{https://security.googleblog.com/2024/09/a-new-path-for-kyber-on-web.html}},
+  month        = sep,
+  year         = {2024}
+}
+
+@misc{traefikpq,
+  author       = {{Traefik Community Forum}},
+  title        = {{HostSNI} Routing Fails on Post-Quantum ({ML-KEM}) {TLS} 1.3 Connections due to {ClientHello} Fragmentation},
+  howpublished = {\url{https://community.traefik.io/t/tcp-router-hostsni-routing-fails-on-post-quantum-ml-kem-tls-1-3-connections-due-to-clienthello-fragmentation/29730}},
+  year         = {2026}
+}
+
+@misc{traefikcve,
+  author       = {{MITRE}},
+  title        = {{CVE-2026-32305}: {Traefik} {mTLS} Bypass via Fragmented {TLS} {ClientHello}},
+  howpublished = {\url{https://www.cve.org/CVERecord?id=CVE-2026-32305}},
+  year         = {2026}
 }
 
 @misc{pcapimmediate,
